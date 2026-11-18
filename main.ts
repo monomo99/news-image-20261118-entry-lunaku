@@ -1,22 +1,40 @@
-// News-image entry (Node 22, standard library only). The front page stored
-// in this repository as entry.png is written to /output/entry.png. The
-// grader executes this program twice and requires both runs to produce
-// identical bytes, so the program performs one deterministic copy and
-// nothing else.
+// Front-page image emitter for the 18 November 2026 news-image entry.
+// The picture itself lives next to this file as entry.png. This program
+// only hands that exact picture to the grader: it reads the bytes, checks
+// they really are a PNG, and writes the identical bytes to the output
+// folder. Nothing here reads the clock, the network, or random data, so
+// running it twice produces byte-for-byte the same file both times.
 //
-// When run outside the grader, MAKEFUN_OUTPUT_DIR takes the place of
-// /output:  mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts
+// Local check:  mkdir -p out && MAKEFUN_OUTPUT_DIR=out node main.ts
 
-import { copyFileSync, existsSync, mkdirSync, statSync } from 'node:fs';
-import { join, dirname } from 'node:path';
+import { mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const here = dirname(fileURLToPath(import.meta.url));
-const image = join(here, 'entry.png');
-const targetDir = process.env.MAKEFUN_OUTPUT_DIR ?? '/output';
+const PNG_MAGIC = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
-if (!existsSync(image) || statSync(image).size === 0) {
-  throw new Error('entry.png is missing or empty');
+const folder = dirname(fileURLToPath(import.meta.url));
+const source = join(folder, 'entry.png');
+const outDir = process.env.MAKEFUN_OUTPUT_DIR ?? '/output';
+const target = join(outDir, 'entry.png');
+
+const picture = readFileSync(source);
+if (picture.length === 0) {
+  throw new Error('entry.png is empty');
 }
-mkdirSync(targetDir, { recursive: true });
-copyFileSync(image, join(targetDir, 'entry.png'));
+if (!picture.subarray(0, 8).equals(PNG_MAGIC)) {
+  throw new Error('entry.png is not a PNG file');
+}
+
+mkdirSync(outDir, { recursive: true });
+writeFileSync(target, picture);
+
+const written = statSync(target);
+if (written.size !== picture.length) {
+  throw new Error(`short write: ${written.size} of ${picture.length} bytes`);
+}
+const roundTrip = readFileSync(target);
+if (!roundTrip.equals(picture)) {
+  throw new Error('output bytes differ from entry.png');
+}
+console.log(`wrote ${target} (${written.size} bytes)`);
